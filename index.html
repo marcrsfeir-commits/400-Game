@@ -169,13 +169,13 @@
 <div class="wrap">
   <div class="home" id="home">
     <div class="logo">400</div>
-    <div class="tag">The classic four-player game. <b>Hearts are trump.</b> Bid what you'll take, race your partner to 41.</div>
+    <div class="tag">The classic four-player game. <b>Hearts are trump.</b> Every player for themselves — bid what you'll take, first to 41 wins.</div>
     <div class="home-actions">
       <button class="big primary" id="playBots"><span class="ic">🤖</span> Play vs bots</button>
       <button class="big" id="playOnline"><span class="ic">🌐</span> Play online with friends</button>
       <button class="big" id="howto"><span class="ic">📖</span> How to play</button>
     </div>
-    <div class="foot">Partners sit across. Bids must total at least 11 (12 past 30, 13 past 40). Make your bid, score it; miss it, lose it.</div>
+    <div class="foot">Every player for themselves. Bids must total at least 11 (12 past 30, 13 past 40). Make your bid, score it; miss it, lose it.</div>
   </div>
 
   <div class="game" id="game">
@@ -231,7 +231,7 @@ function beats(A,B,led){var at=A.s===TRUMP,bt=B.s===TRUMP;if(at&&!bt)return true
 function trickWinner(plays){var led=plays[0].card.s,best=plays[0];for(var i=1;i<plays.length;i++){if(beats(plays[i].card,best.card,led))best=plays[i];}return best.seat;}
 function madeValue(bid,sb){if(bid<=4)return bid;if(bid===10)return 999;if(sb>=30){if(bid===5)return 5;if(bid===6)return 6;if(bid===7)return 14;if(bid===8)return 16;if(bid===9)return 27;}else{if(bid===5)return 10;if(bid===6)return 12;if(bid===7)return 14;if(bid===8)return 16;if(bid===9)return 27;}return bid;}
 function handDelta(bid,won,sb){return won>=bid?madeValue(bid,sb):-bid;}
-function winnerTeam(scores){var teams=[[0,2],[1,3]];var q=teams.filter(function(t){return (scores[t[0]]>=41&&scores[t[1]]>0)||(scores[t[1]]>=41&&scores[t[0]]>0);});if(!q.length)return null;if(q.length===1)return q[0];q.sort(function(x,y){return (scores[y[0]]+scores[y[1]])-(scores[x[0]]+scores[x[1]]);});return q[0];}
+function gameWinner(scores){var best=-1,bs=-Infinity;for(var i=0;i<4;i++){if(scores[i]>=41&&scores[i]>bs){bs=scores[i];best=i;}}return best<0?null:best;} // individual: first (highest) to 41 wins
 
 /* ============ BOTS ============ */
 function estimateBid(hand){var trumps=hand.filter(function(c){return c.s===TRUMP;}),pts=0;
@@ -248,10 +248,10 @@ function botPlay(seat,hand,plays,tricksWon,bid){
     var tt=hand.filter(function(c){return c.s===TRUMP&&c.r>=13;});if(tt.length)return highest(tt);
     var side=hand.filter(function(c){return c.s!==TRUMP;});if(side.length)return highest(side);return highest(hand);}
     else{var sd=hand.filter(function(c){return c.s!==TRUMP;});return lowest(sd.length?sd:hand);}}
-  var winS=trickWinner(plays),best=plays.filter(function(p){return p.seat===winS;})[0].card,pWin=winS===partnerOf(seat);
+  var winS=trickWinner(plays),best=plays.filter(function(p){return p.seat===winS;})[0].card;
   var winners=legal.filter(function(c){return beats(c,best,led);});
-  if(need&&winners.length&&!pWin)return lowest(winners);
-  if(pWin)return lowest(legal);return lowest(legal);}
+  if(need&&winners.length)return lowest(winners);   // no partners: win tricks you need, else dump low
+  return lowest(legal);}
 
 /* ============ SHARED STATE + VIEW ============ */
 var BOTNAMES=["Sami","Rana","Karim","Lina","Nadia","Ziad"];
@@ -328,7 +328,7 @@ function endHandBots(){
   G.phase="handEnd"; var before=G.scores.slice();
   var deltas=[0,1,2,3].map(function(i){return handDelta(G.bids[i],G.tricksWon[i],before[i]);});
   for(var i=0;i<4;i++) G.scores[i]+=deltas[i];
-  render(); showHandSummary(deltas,winnerTeam(G.scores),false,null);
+  render(); showHandSummary(deltas,gameWinner(G.scores),false,null);
 }
 // bots-mode human input
 function humanBidBots(v){ G.bids[0]=v; $("bidbar").style.display="none"; render(); toast("You bid "+v); setTimeout(bidStepBots,450); }
@@ -338,7 +338,7 @@ function humanPlayBots(card){ doPlayBots(0,card); }
 function serialize(){
   return {phase:G.phase,dealer:G.dealer,handNo:G.handNo,firstLeader:G.firstLeader,leader:G.leader,turn:G.turn,
     seats:G.seats,hands:G.hands,bids:G.bids,tricksWon:G.tricksWon,scores:G.scores,trick:G.trick,
-    creatorId:G.creatorId,started:G.started,lastDeltas:G.lastDeltas||null,winTeam:G.winTeam||null,rev:(G.rev||0)+1};
+    creatorId:G.creatorId,started:G.started,lastDeltas:G.lastDeltas||null,winSeat:(G.winSeat==null?null:G.winSeat),rev:(G.rev||0)+1};
 }
 function apply(s){ if(!G||typeof G!=="object"){ G={}; } for(var k in s){ G[k]=s[k]; } }
 
@@ -489,8 +489,8 @@ function endHandNet(){
   var before=G.scores.slice();
   var deltas=[0,1,2,3].map(function(i){return handDelta(G.bids[i],G.tricksWon[i],before[i]);});
   for(var i=0;i<4;i++) G.scores[i]+=deltas[i];
-  G.lastDeltas=deltas; G.winTeam=winnerTeam(G.scores); G.phase=(G.winTeam?"gameOver":"handEnd");
-  netWrite(); render(); showHandSummary(deltas,G.winTeam,true,before);
+  G.lastDeltas=deltas; G.winSeat=gameWinner(G.scores); G.phase=(G.winSeat!=null?"gameOver":"handEnd");
+  netWrite(); render(); showHandSummary(deltas,G.winSeat,true,before);
 }
 // net human input
 function humanBidNet(v){ G.bids[VIEW]=v; $("bidbar").style.display="none"; step(); }
@@ -530,7 +530,6 @@ function render(winGlowSeat){
     var sc=G.scores[seat], bid=G.bids[seat];
     var backs="";
     if(seat!==VIEW){ var n=G.hands[seat]?G.hands[seat].length:0,show=Math.min(n,6),bi="";for(var q=0;q<show;q++)bi+='<i></i>';backs='<div class="backs">'+bi+'</div>'; }
-    var isPartner=(seat===partnerOf(VIEW));
     var botTag = (G.seats[seat].bot)?'<span class="tagm">bot</span>':'';
     var meta='<div class="pmeta">'+
       (bid!=null?'<span class="chipm">bid <b>'+bid+'</b></span>':'<span class="chipm" style="opacity:.6">bid —</span>')+
@@ -540,7 +539,7 @@ function render(winGlowSeat){
         '<div class="pscore'+(sc<0?" neg":"")+' num">'+sc+'</div>'+
         (G.dealer===seat?'<div class="dealerdot">D</div>':'')+
         '<div class="prow"><span class="pdot" style="background:'+COL[stepsFrom(VIEW,seat)]+'"></span>'+
-          '<span class="pnm">'+esc(seatName(seat))+'</span>'+(isPartner?'<span class="tagm" style="background:var(--line-2);color:var(--brass)">partner</span>':'')+'</div>'+
+          '<span class="pnm">'+esc(seatName(seat))+'</span></div>'+
         meta+
       '</div>';
     table.appendChild(el);
@@ -617,10 +616,9 @@ function renderLobby(){
     var st=G.seats[i], isMine=(st.id===MYID);
     var label = st.claimed ? (st.human?esc(st.name):"—") : "Open seat";
     var sub = st.claimed ? (st.human?(isMine?"you":"joined"):"") : "tap to sit here";
-    var partner = (i===partnerOf(mine>=0?mine:0));
     seatsHtml+='<div class="lseat'+(isMine?" mine":"")+'">'+
       '<span class="ld" style="background:'+COL[i]+'"></span>'+
-      '<span class="lnm">'+ (st.claimed? label : "Open seat") +'<small>'+ sub +(partner&&mine>=0?" · your partner":"") +'</small></span>'+
+      '<span class="lnm">'+ (st.claimed? label : "Open seat") +'<small>'+ sub +'</small></span>'+
       (isMine?'<span class="youtag">YOU</span>':(st.claimed?'':'<button class="claim" data-seat="'+i+'">Sit</button>'))+
     '</div>';
   }
@@ -642,19 +640,20 @@ function renderLobby(){
 }
 
 /* ============ SUMMARY / GAMEOVER ============ */
-function showHandSummary(deltas,wt,isNet,before){
+function showHandSummary(deltas,win,isNet,before){
   var m=$("modal"); var rows="";
-  var ord=[VIEW,partnerOf(VIEW)]; for(var z=0;z<4;z++){ if(ord.indexOf(z)<0) ord.push(z); } // you, partner, opponents
+  var ord=[0,1,2,3].sort(function(a,b){return G.scores[b]-G.scores[a];}); // rank by score, leader first
   ord.forEach(function(i){
     var cls=deltas[i]>0?"up":(deltas[i]<0?"down":"");
+    var you=(i===VIEW)?' <span style="color:var(--brass);font-weight:800">(you)</span>':'';
     rows+='<div class="srow"><span class="sd" style="background:'+COL[stepsFrom(VIEW,i)]+'"></span>'+
-      '<span class="snm">'+esc(seatName(i))+'</span><span class="sb">bid '+G.bids[i]+' · won '+G.tricksWon[i]+'</span>'+
+      '<span class="snm">'+esc(seatName(i))+you+'</span><span class="sb">bid '+G.bids[i]+' · won '+G.tricksWon[i]+'</span>'+
       '<span class="sdelta '+cls+'">'+(deltas[i]>0?"+":"")+deltas[i]+'</span><span class="stot num">'+G.scores[i]+'</span></div>';
   });
-  if(wt){
-    var weWin = wt.indexOf(VIEW)>=0;
-    m.innerHTML='<div class="trophy">'+(weWin?"🏆":"🎖️")+'</div><h2 style="text-align:center">'+esc(seatName(wt[0]))+' + '+esc(seatName(wt[1]))+' win!</h2>'+
-      '<div class="winsub">Reached 41 with a positive partner.</div><div style="margin-top:14px">'+rows+'</div>'+
+  if(win!=null){
+    var weWin=(win===VIEW);
+    m.innerHTML='<div class="trophy">'+(weWin?"🏆":"🎖️")+'</div><h2 style="text-align:center">'+(weWin?"You win!":esc(seatName(win))+" wins!")+'</h2>'+
+      '<div class="winsub">First to 41.</div><div style="margin-top:14px">'+rows+'</div>'+
       ((!isNet||isCreator())?'<button class="mbtn" id="againBtn">New game</button>':'<button class="mbtn" disabled>Host can start a new game</button>')+
       '<button class="mbtn ghost" id="homeBtn2">Home</button>';
     openModal();
@@ -700,11 +699,11 @@ $("howto").onclick=function(){ showHowTo(); };
 function showHowTo(){
   var m=$("modal");
   m.innerHTML='<h2>How to play 400</h2><div style="font-size:14px;line-height:1.6;color:var(--ink-soft)">'+
-    '<p><b style="color:var(--ink)">Teams.</b> Four players, two partnerships sitting across.</p>'+
+    '<p><b style="color:var(--ink)">Players.</b> Four players, each for themselves — no partners.</p>'+
     '<p><b style="color:var(--ink)">Deal &amp; trump.</b> 13 cards each. <b style="color:var(--brass)">Hearts are always trump.</b></p>'+
     '<p><b style="color:var(--ink)">Bid.</b> Everyone bids the tricks they’ll personally take (min 2). The four bids must total at least 11 — 12 once someone passes 30, 13 past 40 — or it’s a misdeal.</p>'+
     '<p><b style="color:var(--ink)">Play.</b> Follow the led suit if you can; otherwise play anything (trump to win). Highest trump — or highest of the led suit — takes the trick.</p>'+
-    '<p><b style="color:var(--ink)">Score.</b> Make your bid → gain it (bids of 5+ score double: 5=10, 6=12, 7=14…). Miss it → lose it. First team to 41 with a positive partner wins.</p>'+
+    '<p><b style="color:var(--ink)">Score.</b> Make your bid → gain it (bids of 5+ score double: 5=10, 6=12, 7=14…). Miss it → lose it. First player to 41 wins.</p>'+
     '</div><button class="mbtn" id="htClose">Got it</button>';
   openModal(); $("htClose").onclick=closeModal;
 }
