@@ -510,7 +510,7 @@ function setMyName(n){ MYNAME=n||"Player"; try{localStorage.setItem("four00name"
 
 /* ============ RENDER (shared) ============ */
 function rankTxt(r){return r===14?"A":r===13?"K":r===12?"Q":r===11?"J":(""+r);}
-function suitOrderKey(c){var o={H:0,S:1,D:2,C:3};return o[c.s]*100+c.r;}
+function suitOrderKey(c){var o={H:0,S:1,D:2,C:3};return o[c.s]*100+(14-c.r);}
 function sortHand(h){return h.slice().sort(function(a,b){return suitOrderKey(a)-suitOrderKey(b);});}
 function cardMini(card){var red=RED[card.s]?" red":"";return '<div class="card'+red+'"><span class="r">'+rankTxt(card.r)+'</span><span class="s">'+SUIT_SYM[card.s]+'</span><span class="r2">'+rankTxt(card.r)+'</span></div>';}
 
