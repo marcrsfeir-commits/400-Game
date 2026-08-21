@@ -524,6 +524,7 @@ function render(winGlowSeat){
   $("hdrSub").textContent = (G.phase==="gameOver")?"Game over":("Hand "+(G.handNo||1));
 
   for(var seat=0;seat<4;seat++){
+    if(seat===VIEW){ continue; } // your own info is in the bottom bar, not a floating plate over your cards
     var el=document.createElement("div"); el.className="seat "+relPos(seat);
     var isTurn=(G.turn===seat && (G.phase==="bid"||G.phase==="play"));
     var sc=G.scores[seat], bid=G.bids[seat];
@@ -579,9 +580,17 @@ function renderHand(){
 function renderHandBar(){
   var hint=$("handHint"),st=$("handStatus");
   if(!G){return;}
-  if(G.phase==="bid"){ hint.textContent = myTurnInput()?"Your turn to bid":"Bidding…"; st.innerHTML=(G.bids[VIEW]!=null?'you bid <b>'+G.bids[VIEW]+'</b>':''); }
-  else if(G.phase==="play"){ hint.textContent=myTurnInput()?"Your turn — tap a card":(seatName(G.turn)+" to play…"); st.innerHTML='you: bid <b>'+(G.bids[VIEW]!=null?G.bids[VIEW]:"—")+'</b> · won <b>'+(G.tricksWon[VIEW]||0)+'</b>'; }
-  else { hint.textContent="Your cards"; st.textContent=""; }
+  var yv=(G.scores?G.scores[VIEW]:0);
+  var youNm=(G.seats&&G.seats[VIEW])?seatName(VIEW):"You";
+  var deal=(G.dealer===VIEW)?' · <span style="color:var(--brass)">dealer</span>':'';
+  var base='<b>'+esc(youNm)+'</b> · <span class="num">'+yv+'</span> pts';
+  if(G.phase==="bid"){
+    hint.textContent = myTurnInput()?"Your turn to bid":"Bidding…";
+    st.innerHTML=base+(G.bids[VIEW]!=null?' · bid <b>'+G.bids[VIEW]+'</b>':'')+deal;
+  } else if(G.phase==="play"){
+    hint.textContent=myTurnInput()?"Your turn — tap a card":(seatName(G.turn)+" to play…");
+    st.innerHTML=base+' · bid <b>'+(G.bids[VIEW]!=null?G.bids[VIEW]:"—")+'</b> · won <b>'+(G.tricksWon[VIEW]||0)+'</b>'+deal;
+  } else { hint.textContent="Your cards"; st.innerHTML=base; }
 }
 function showBidBar(){
   var bar=$("bidbar"); bar.style.display="block";
